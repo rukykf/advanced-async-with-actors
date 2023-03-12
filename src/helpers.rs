@@ -139,7 +139,7 @@ pub async fn fetch_closing_data(
 
 
 #[message(result = "()")]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProcessSymbolSignalsMessage{
     pub symbol: String,
     pub from: DateTime<Utc>,
@@ -154,7 +154,7 @@ impl Actor for ProcessSymbolActor{
     async fn started(&mut self, ctx: &mut Context<Self>) -> Result<()> {
         dbg!("Starting ProcessSymbol actor");
 
-        ctx.subscribe::<ProcessSymbolSignalsMessage>().await;
+        ctx.subscribe::<ProcessSymbolSignalsMessage>().await?;
 
         Ok(())
     }
@@ -188,19 +188,19 @@ impl Handler<ProcessSymbolSignalsMessage> for ProcessSymbolActor {
                 sma.last().unwrap_or(&0.0)
             );
 
-            let printSignalMsg = PrintSymbolSignalsMessage {
+            let print_signal_msg = PrintSymbolSignalsMessage {
                 symbol: msg.symbol,
                 message: symbol_message
             };
 
-            Broker::from_registry().await.unwrap().publish(printSignalMsg);
+            Broker::from_registry().await.unwrap().publish(print_signal_msg).unwrap();
         }
        
     }
 }
 
 #[message(result = "()")]
-#[derive(Clone)]
+#[derive(Debug, Default, Clone)]
 struct PrintSymbolSignalsMessage{
     symbol: String,
     message: String
@@ -213,7 +213,7 @@ impl Actor for PrintSymbolSignalsActor{
     async fn started(&mut self, ctx: &mut Context<Self>) -> Result<()> {
         dbg!("Starting Print symbol actor");
 
-        ctx.subscribe::<PrintSymbolSignalsMessage>().await;
+        ctx.subscribe::<PrintSymbolSignalsMessage>().await?;
 
         Ok(())
     }

@@ -15,7 +15,7 @@ use helpers::*;
 #[derive(Parser, Debug)]
 #[clap(
     version = "1.0",
-    author = "Claus Matzinger",
+    author = "Kofi Oghenerukevwe H.",
     about = "A Manning LiveProject: async Rust"
 )]
 struct Opts {
@@ -25,12 +25,12 @@ struct Opts {
     from: String,
 }
 
-#[message(result = "()")]
-#[derive(Clone)]
+#[message]
+#[derive(Debug, Clone)]
 struct DownloadSymbolMessage {
-    pub symbol: String,
-    pub from: DateTime<Utc>,
-    pub to: DateTime<Utc>,
+    symbol: String,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
 }
 
 struct DownloadActor;
@@ -39,7 +39,7 @@ struct DownloadActor;
 impl Actor for DownloadActor {
     async fn started(&mut self, ctx: &mut Context<Self>) -> Result<()> {
         dbg!("Starting download actor");
-        ctx.subscribe::<DownloadSymbolMessage>().await;
+        ctx.subscribe::<DownloadSymbolMessage>().await?;
 
         Ok(())
     }
@@ -65,28 +65,35 @@ impl Handler<DownloadSymbolMessage> for DownloadActor {
 }
 
 
-#[async_std::main]
+
+#[xactor::main]
 async fn main() -> std::io::Result<()> {
     let opts = Opts::parse();
     let from: DateTime<Utc> = opts.from.parse().expect("Couldn't parse 'from' date");
     let to = Utc::now();
 
-    let mut interval = stream::interval(Duration::from_secs(2));
+    let mut interval = stream::interval(Duration::from_secs(1));
 
-    DownloadActor.start().await.unwrap();
-    ProcessSymbolActor.start().await.unwrap();
-    PrintSymbolSignalsActor.start().await.unwrap();
+    let _downloader = Supervisor::start(|| DownloadActor).await;
+    let _processor = Supervisor::start(|| ProcessSymbolActor).await;
+    let _sink = Supervisor::start(|| PrintSymbolSignalsActor).await;
+
+    // DownloadActor.start().await.unwrap();
+    // ProcessSymbolActor.start().await.unwrap();
+    // PrintSymbolSignalsActor.start().await.unwrap();
 
     // a simple way to output a CSV header
     println!("period start,symbol,price,change %,min,max,30d avg");
     let symbols: Vec<&str> = opts.symbols.split(',').collect();
     while let Some(_) = interval.next().await {
         for symbol in &symbols {
-            Broker::from_registry().await.unwrap().publish(DownloadSymbolMessage {
+            let request = DownloadSymbolMessage {
                 symbol: symbol.to_string().clone(),
                 from: from.clone(),
                 to: to.clone()
-            });
+            };
+
+            Broker::from_registry().await.unwrap().publish(request).unwrap();
         }
     }
     Ok(())
